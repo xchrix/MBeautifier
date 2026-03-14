@@ -46,6 +46,9 @@ classdef MBeautify
 
             % Validate path to prevent path traversal
             baseDir = fileparts(mfilename('fullpath'));
+            if isempty(baseDir)
+                baseDir = pwd;
+            end
             file = MBeautify.validatePath(file, baseDir);
 
             text = fileread(file);
@@ -65,6 +68,9 @@ classdef MBeautify
             
             % Validate output path to prevent path traversal
             baseDir = fileparts(mfilename('fullpath'));
+            if isempty(baseDir)
+                baseDir = pwd;
+            end
             outFile = MBeautify.validatePath(outFile, baseDir);
 
             % write formatted text to file
@@ -358,18 +364,26 @@ classdef MBeautify
             try
                 resolvedPath = char(java.io.File(inputPath).getCanonicalPath());
                 resolvedBase = char(java.io.File(baseDir).getCanonicalPath());
+                % Normalize paths for comparison
+                resolvedPath = strrep(resolvedPath, '\', '/');
+                resolvedBase = strrep(resolvedBase, '\', '/');
+                % Check if resolved path starts with base directory
+                if startsWith(resolvedPath, [resolvedBase, '/'])
+                    result = inputPath;
+                    return;
+                end
             catch
-                % Fallback: use fileparts for MATLAB compatibility
-                resolvedPath = fileparts(inputPath);
-                resolvedBase = fileparts(baseDir);
+                % Fallback: continue with fileparts
             end
 
-            % Normalize paths for comparison
+            % Fallback: use fileparts for MATLAB compatibility
+            resolvedPath = fileparts(inputPath);
+            resolvedBase = fileparts(baseDir);
             resolvedPath = strrep(resolvedPath, '\', '/');
             resolvedBase = strrep(resolvedBase, '\', '/');
 
             % Check if resolved path starts with base directory
-            if ~startsWith(resolvedPath, [resolvedBase, '/'])
+            if ~isempty(resolvedBase) && ~startsWith(resolvedPath, [resolvedBase, '/'])
                 error('MBeautifier:PathTraversal', 'Invalid path: path traversal detected');
             end
             result = inputPath;
