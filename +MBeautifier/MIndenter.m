@@ -39,7 +39,7 @@ classdef MIndenter < handle
                     indent = [' ', indent];
                 end
             elseif strcmpi(indentationCharacter, 'tab')
-                indent = '\t';
+                indent = char(9);
             else
                 warning('MBeautifier:IllegalSetting:IndentationCharacter', 'MBeautifier: The indentation character must be set to "white-space" or "tab". MBeautifier using MATLAB defaults.');
                 indent = '    ';
