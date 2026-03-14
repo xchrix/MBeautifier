@@ -106,8 +106,12 @@ classdef Configuration < handle
 
             function escapedValue = removeXMLEscaping(value)
                 escapedValue = regexprep(value, '&lt;', '<');
-                escapedValue = regexprep(escapedValue, '&amp;', '&');
                 escapedValue = regexprep(escapedValue, '&gt;', '>');
+                escapedValue = regexprep(escapedValue, '&amp;', '&');
+                escapedValue = regexprep(escapedValue, '&quot;', '"');
+                escapedValue = regexprep(escapedValue, '&apos;', '''');
+                % Handle numeric character references (e.g., &#39; for apostrophe, &#34; for quote)
+                escapedValue = regexprep(escapedValue, '&#(\d+);', '${char(str2num($1))}');
             end
         end
     end

@@ -34,11 +34,11 @@ classdef StringMemory < handle
                 for iMatch = 1:numel(indices)
                     if ~isInString
                         if iMatch == 1
-                            predecingPart = actCode(1:indices(iMatch)-1);
+                            precedingPart = actCode(1:indices(iMatch)-1);
                         else
-                            predecingPart = actCode(indices(iMatch-1)+1:indices(iMatch)-1);
+                            precedingPart = actCode(indices(iMatch-1)+1:indices(iMatch)-1);
                         end
-                        strArray{iMatch} = predecingPart;
+                        strArray{iMatch} = precedingPart;
                         isInString = true;
                         stringStartedWith = actCode(indices(iMatch));
                         continue

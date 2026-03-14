@@ -9,12 +9,12 @@ classdef (Abstract) Directive < handle
     end
 
     methods(Abstract, Access = protected)
-        [success, toBeGarbadeCollected] = tryToupdateFromValue(obj, value)
+        [success, toBeGarbageCollected] = tryToupdateFromValue(obj, value)
     end
 
     methods(Sealed)
-        function [success, toBeGarbadeCollected] = updateFromValue(obj, value)
-            [success, toBeGarbadeCollected] = obj.tryToupdateFromValue(value);
+        function [success, toBeGarbageCollected] = updateFromValue(obj, value)
+            [success, toBeGarbageCollected] = obj.tryToupdateFromValue(value);
             if ~success
                 warning('MBeautifier:Directive:InvalidValue', ['The value "', char(value), '" is not a valid directive value for directive "', obj.Name, '".']);
             end

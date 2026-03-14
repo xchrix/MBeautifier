@@ -43,7 +43,11 @@ classdef MBeautify
             if ~exist(file, 'file')
                 return;
             end
-            
+
+            % Validate path to prevent path traversal
+            baseDir = fileparts(mfilename('fullpath'));
+            file = MBeautify.validatePath(file, baseDir);
+
             text = fileread(file);
             
             % Format the code
@@ -59,9 +63,21 @@ classdef MBeautify
                 outFile = file;
             end
             
+            % Validate output path to prevent path traversal
+            baseDir = fileparts(mfilename('fullpath'));
+            outFile = MBeautify.validatePath(outFile, baseDir);
+
             % write formatted text to file
             fid = fopen(outFile, 'wt');
-            fprintf(fid, '%s', text);
+            if fid == -1
+                error('MBeautifier:FileOpen', 'Cannot open file for writing: %s', outFile);
+            end
+            try
+                fprintf(fid, '%s', text);
+            catch err
+                fclose(fid);
+                rethrow(err);
+            end
             fclose(fid);
         end
         
@@ -125,11 +141,25 @@ classdef MBeautify
             if recurse
                 directory = fullfile(directory, '**');
             end
-            
+
+            % Resolve the base directory and store for validation
+            baseDir = directory;
+            if recurse
+                baseDir = fileparts(directory);
+            end
+            baseDir = strrep(fileparts(baseDir), '\', '/');
+
             files = dir(fullfile(directory, fileFilter));
-            
+
             for iF = 1:numel(files)
                 file = fullfile(files(iF).folder, files(iF).name);
+
+                % Validate that resolved path stays within base directory
+                resolvedPath = strrep(fileparts(file), '\', '/');
+                if ~startsWith(resolvedPath, baseDir)
+                    continue; % Skip files outside the base directory
+                end
+
                 if editor
                     MBeautify.formatFile(file, file);
                 else
@@ -315,36 +345,64 @@ classdef MBeautify
             %   'editorpage' - MBeauty.formatCurrentEditorPage
             %   'editorselection' - MBeauty.formatEditorSelection
             %   'file' - MBeauty.formatFile
-            
+
             MBeautyShortcuts.createShortcut(mode);
+        end
+
+        function result = validatePath(inputPath, baseDir)
+            % Public method for path validation (for testing)
+            % Validates that the input path is within the base directory
+            % Prevents path traversal attacks
+
+            % Use Java to resolve the full path
+            try
+                resolvedPath = char(java.io.File(inputPath).getCanonicalPath());
+                resolvedBase = char(java.io.File(baseDir).getCanonicalPath());
+            catch
+                % Fallback: use fileparts for MATLAB compatibility
+                resolvedPath = fileparts(inputPath);
+                resolvedBase = fileparts(baseDir);
+            end
+
+            % Normalize paths for comparison
+            resolvedPath = strrep(resolvedPath, '\', '/');
+            resolvedBase = strrep(resolvedBase, '\', '/');
+
+            % Check if resolved path starts with base directory
+            if ~startsWith(resolvedPath, [resolvedBase, '/'])
+                error('MBeautifier:PathTraversal', 'Invalid path: path traversal detected');
+            end
+            result = inputPath;
         end
     end
     
     %% Private helpers
-    
+
     methods (Static = true, Access = private)
         function indentPage(editorPage, configuration)
             %
             % function indentPage(editorPage, configuration)
             %
-            
+
             indentationStrategy = configuration.specialRule('Indentation_Strategy').Value;
             originalPreference = com.mathworks.services.Prefs.getStringPref('EditorMFunctionIndentType');
-            
-            switch lower(indentationStrategy)
-                case 'allfunctions'
-                    com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', 'AllFunctionIndent');
-                case 'nestedfunctions'
-                    com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', 'MixedFunctionIndent');
-                case 'noindent'
-                    com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', 'ClassicFunctionIndent');
-            end
-            
-            editorPage.smartIndentContents();
-            
-            % Restore original settings, if necessary
-            if (length(originalPreference) > 0 && originalPreference ~= com.mathworks.services.Prefs.getStringPref('EditorMFunctionIndentType'))
-                com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', originalPreference);
+
+            try
+                switch lower(indentationStrategy)
+                    case 'allfunctions'
+                        com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', 'AllFunctionIndent');
+                    case 'nestedfunctions'
+                        com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', 'MixedFunctionIndent');
+                    case 'nowrap'
+                        com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', 'ClassicFunctionIndent');
+                end
+
+                editorPage.smartIndentContents();
+            finally
+                % Restore original settings, if necessary - always executes
+                if (length(originalPreference) > 0 && originalPreference ~= com.mathworks.services.Prefs.getStringPref('EditorMFunctionIndentType'))
+                    com.mathworks.services.Prefs.setStringPref('EditorMFunctionIndentType', originalPreference);
+                end
             end
             
             indentationCharacter = configuration.specialRule('IndentationCharacter').Value;
@@ -415,29 +473,35 @@ classdef MBeautify
             %
             % function configuration = getConfiguration()
             %
-            
+
             [parent, file, ext] = fileparts(MBeautify.RulesXMLFileFull);
             path = java.nio.file.Paths.get(parent, [file, ext]);
-            
+
             if ~path.toFile.exists()
                 error('MBeautifier:Configuration:ConfigurationFileDoesNotExist', 'The configuration XML file is missing!');
             end
-            
+
             bytes = java.nio.file.Files.readAllBytes(path);
             md = java.security.MessageDigest.getInstance('md5');
             currentChecksum = javax.xml.bind.DatatypeConverter.printHexBinary(md.digest(bytes));
-            storedChecksum = getappdata(0, 'MBeautifier_ConfigurationChecksum');
+
+            % Use session-based key to avoid cross-session data leakage
+            sessionId = num2str(feature('getpid'));
+            appdataKeyChecksum = ['MBeautifier_', sessionId, '_ConfigurationChecksum'];
+            appdataKeyObject = ['MBeautifier_', sessionId, '_ConfigurationObject'];
+
+            storedChecksum = getappdata(0, appdataKeyChecksum);
             if isempty(storedChecksum)
                 storedChecksum = '';
             end
             configuration = [];
             if strcmpi(currentChecksum, storedChecksum)
-                configuration = getappdata(0, 'MBeautifier_ConfigurationObject');
+                configuration = getappdata(0, appdataKeyObject);
             end
             if isempty(configuration)
                 configuration = MBeautifier.Configuration.Configuration.fromFile(MBeautify.RulesXMLFileFull);
-                setappdata(0, 'MBeautifier_ConfigurationChecksum', currentChecksum);
-                setappdata(0, 'MBeautifier_ConfigurationObject', configuration);
+                setappdata(0, appdataKeyChecksum, currentChecksum);
+                setappdata(0, appdataKeyObject, configuration);
             end
         end
     end

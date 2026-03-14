@@ -22,7 +22,7 @@ classdef MBeautyShortcuts
             
             shortCutStruct = MBeautyShortcuts.getShortcutCategoryStructure(mode);
             
-            % Below 2019b shortcuts will be sued
+            % Below 2019b shortcuts will be used
             if verLessThan('matlab', '9.5')
                 shortcutUtils = com.mathworks.mlwidgets.shortcuts.ShortcutUtils();
                 
@@ -110,7 +110,7 @@ classdef MBeautyShortcuts
                 structure = MBeautyShortcuts.getFileShortcut();
             end
             
-            pathToAdd = eval('fileparts(mfilename(''fullpath''))');
+            pathToAdd = fileparts(mfilename('fullpath'));
             addPathCommand = ['addpath(''', pathToAdd, ''');'];
             structure.Callback = [addPathCommand, structure.Callback];
             
